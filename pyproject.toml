@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mpitg"
+version = "0.1.0"
+description = "Multi-Paradigm Interplanetary Trajectory Generator"
+authors = [{name = "ornithopter", email = "rndaorg@gmail.com"}]
+license = {text = "Apache 2.0"}
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "numpy>=2.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "black", "mypy", "pytest-cov"]
