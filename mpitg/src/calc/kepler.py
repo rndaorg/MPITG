@@ -1,6 +1,8 @@
 import numpy as np
 
-def keplerian_to_cartesian(a, e, i, Omega, omega, nu, mu=3.986004418e14):
+from mpitg.src.almanac.constants import MU_EARTH
+
+def keplerian_to_cartesian(a, e, i, Omega, omega, nu, mu=MU_EARTH):
     """
     Convert Keplerian orbital elements to inertial position and velocity vectors.
 
@@ -8,7 +10,7 @@ def keplerian_to_cartesian(a, e, i, Omega, omega, nu, mu=3.986004418e14):
     -----------
     a : float
         Semi-major axis [m]
-    e : float
+    e : float 
         Eccentricity (dimensionless)
     i : float
         Inclination [rad]
