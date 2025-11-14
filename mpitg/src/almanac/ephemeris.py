@@ -10,6 +10,8 @@ from datetime import datetime, timedelta
 def load_spice_kernels(): 
     spice.furnsh("mpitg\\src\\almanac\\kernels\\naif0012.tls")
     spice.furnsh("mpitg\\src\\almanac\\kernels\\de440s.bsp")
+    spice.furnsh("mpitg\\src\\almanac\\kernels\\pck00010.tpc")
+    spice.furnsh("mpitg\\src\\almanac\\kernels\\Gravity.tpc")
 
 # SPICE body IDs:
 # Sun = 10, Mercury = 199, Venus = 299, Earth = 399, Mars = 499
@@ -25,6 +27,58 @@ colors = {
     'Earth': 'mediumblue',
     'Mars': 'red'
 }
+
+solar_system_constants = {}
+
+def fetch_all_solar_system_constants():
+    # Load SPICE kernels (make sure to download these kernels)
+    load_spice_kernels()
+    
+    # List of known solar system bodies (planets and some moons)
+    solar_system_bodies = [
+        "MERCURY", "VENUS", "EARTH", "MARS", "JUPITER", "SATURN", "URANUS", "NEPTUNE", 
+        "PLUTO", "MOON", "MARS MOON", "IO", "EUROPA", "GANYMEDE", "CALLISTO",  # Jupiter's moons
+        "TITAN", "ENCELADUS", "RHEA", "DIONE", "TETHYS",  # Saturn's moons
+        "TRITON",  # Neptune's moon
+        "CERES",  # Dwarf planet in the asteroid belt
+        "VESTA", "PALLAS", "JUNO", "CIGAR", "EUNOMIA"  # Some large asteroids
+    ]
+
+    # Store constants for all bodies
+
+    for body in solar_system_bodies:
+        try:
+            # Fetch Gravitational Parameter (GM) for the body (in km^3/s^2)
+            mu = spice.bodvrd(body, "GM", 1)[1][0]
+            
+            # Fetch Radius for the body (in km)
+            radius = spice.bodvrd(body, "RADII", 3)[1][0]  # Returns an array, we take the first value
+            
+            # Store in dictionary
+            solar_system_constants[body] = {
+                'mu': mu,             # Gravitational parameter (km^3/s^2)
+                'radius_km': radius,  # Radius (km)
+            }
+        except Exception as e:
+            # Handle bodies that might not have available data in SPICE
+            print(f"Data for {body} not found. Error: {e}")
+            solar_system_constants[body] = {
+                'mu': None,
+                'radius_km': None,
+            }
+
+    # Fetch the Astronomical Unit (AU) in km and the speed of light (CLIGHT)
+    AU_km = spice.bodvrd("SUN", "AU", 1)[1][0]  # AU in kilometers
+    CLIGHT = spice.bodvrd("SUN", "LIGHTSPEED", 1)[1][0]  # Speed of light in km/s
+
+    solar_system_constants['AU_km'] = AU_km
+    solar_system_constants['CLIGHT'] = CLIGHT
+
+    # Unload SPICE kernels when done
+    spice.kclear()
+
+    #return solar_system_constants
+
 
 def validate_spice():
     load_spice_kernels()
@@ -98,3 +152,14 @@ def validate_spice():
 if __name__ == "__main__":
     print("")
     #validate_spice()
+
+    fetch_all_solar_system_constants()
+
+    # Fetch and print constants for all bodies in the solar system
+    for body, data in solar_system_constants.items():
+        if data['mu'] is not None and data['radius_km'] is not None:
+            print(f"{body}:")
+            print(f"  Gravitational Parameter (mu): {data['mu']} km^3/s^2")
+            print(f"  Radius: {data['radius_km']} km")
+        else:
+            print(f"{body} data not available.")
