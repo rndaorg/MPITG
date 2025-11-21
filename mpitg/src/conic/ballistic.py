@@ -1,94 +1,112 @@
+from matplotlib import pyplot as plt
 import numpy as np
 import spiceypy as spice
 
-from mpitg.src.almanac.constants import BODY_IDS, MU_SUN
-from mpitg.src.almanac.ephemeris import load_spice_kernels
-from mpitg.src.calc.izzo import izzo_initial_guess
-from mpitg.src.calc.lambert import solve_lambert
-# ----------------------------
-# Ballistic Leg Evaluator
-# ----------------------------
-def evaluate_ballistic_leg(departure_epoch, target_body, tof_days, prograde=True):
-    """
-    Evaluate heliocentric departure ΔV for a ballistic interplanetary leg.
+from mpitg.src.almanac.constants import DAY, MU_SUN, MU_SUN_KM
+from mpitg.src.almanac.ephemeris import get_keplerian_elements, load_spice_kernels
+from mpitg.src.solver.kepler import kepler_propagate
+from mpitg.src.solver.lambert import universal_lambert
 
-    Parameters:
-    -----------
-    departure_epoch : str or datetime
-        Departure epoch, e.g., '2026-05-15'
-    target_body : str
-        Target body name (e.g., 'Mars', 'Venus')
-    tof_days : float
-        Time of flight in days
-    prograde : bool
-        True for short-way transfer
+load_spice_kernels()
 
-    Returns:
-    --------
-    delta_v : float
-        Departure ΔV relative to Earth (km/s)
-    v_depart_heliocentric : ndarray
-        Heliocentric departure velocity (km/s)
-    v_earth_heliocentric : ndarray
-        Earth's heliocentric velocity at departure (km/s)
-    """
-    if target_body not in BODY_IDS:
-        raise ValueError(f"Unsupported target: {target_body}. Choose from: {list(BODY_IDS.keys())}")
+# Reference epoch (midpoint of your window)
+ref_date = '2024-06-01'
+t0_et = spice.str2et(ref_date)
 
-    # Convert epoch to ephemeris time (ET)
-    if isinstance(departure_epoch, str):
-        et_depart = spice.str2et(departure_epoch)
-    else:
-        et_depart = spice.str2et(departure_epoch.strftime('%Y-%m-%d'))
+# Get elements once
+earth_elts = get_keplerian_elements(3, t0_et)
+mars_elts  = get_keplerian_elements(4, t0_et)
 
-    tof_sec = tof_days * 86400.0
-    et_arrival = et_depart + tof_sec
+# Time grid
+t_launch0 = spice.str2et('2024-01-01')
+t_launch1 = spice.str2et('2024-12-31')
+t_arrival1 = spice.str2et('2026-01-01')
 
-    # Get Earth position/velocity at departure (heliocentric)
-    earth_state, _ = spice.spkgeo(targ=399, et=et_depart, ref='ECLIPJ2000', obs=10)  # 10 = Sun
-    r_earth = earth_state[:3]  # m
-    v_earth = earth_state[3:]  # m/s
+launch_ets = np.arange(t_launch0, t_launch1, 4 * DAY)
+arrival_ets = np.arange(t_launch0 + 200*DAY, t_arrival1, 4 * DAY)
 
-    # Get target position at arrival
-    target_id = BODY_IDS[target_body]
-    target_pos, _ = spice.spkezp(targ=target_id, et=et_arrival, ref='ECLIPJ2000', abcorr='NONE', obs=10)
-    r_target = np.array(target_pos, dtype=np.float64)  # m
+C3_grid = np.full((len(arrival_ets), len(launch_ets)), np.nan)
 
-    initial_guess = izzo_initial_guess(r_earth, r_target, tof_days)
-    print(initial_guess /  86400.0)
 
-    # Solve Lambert
-    try:
-        v_depart_helio = solve_lambert(r_earth, r_target, tof_sec, mu=MU_SUN, prograde=prograde)
-    except Exception as e:
-        raise RuntimeError(f"Lambert solve failed: {e}")
+'''
+for i, t_arr in enumerate(arrival_ets):
+    r2 = kepler_propagate(*mars_elts, t=t_arr)
+    if np.any(np.isnan(r2)): continue
+    for j, t_dep in enumerate(launch_ets):
+        if t_arr <= t_dep: 
+            continue
+        tof = t_arr - t_dep
+        r1 = kepler_propagate(*earth_elts, t=t_dep)
+        if np.any(np.isnan(r1)): 
+            continue
+        
+        v1, v2 = universal_lambert(r1, r2, tof)
+        if np.any(np.isnan(v1)): 
+            continue
 
-    # Compute ΔV = |v_depart_helio - v_earth|
-    delta_v_vec = v_depart_helio - v_earth
-    delta_v = np.linalg.norm(delta_v_vec) / 1000.0  # convert to km/s
+        # Planet velocities via analytical derivative (or approximate)
+        # Simple: use circular orbit approximation for v_planet
+        v_earth = np.sqrt(MU_SUN_KM / np.linalg.norm(r1)) * np.array([-r1[1], r1[0], 0]) / np.linalg.norm(r1[:2])
+        v_mars  = np.sqrt(MU_SUN_KM / np.linalg.norm(r2)) * np.array([-r2[1], r2[0], 0]) / np.linalg.norm(r2[:2])
 
-    return delta_v, v_depart_helio / 1000.0, v_earth / 1000.0
+        v_inf = v1 - v_earth
+        C3_grid[i, j] = np.dot(v_inf, v_inf)
 
-# ----------------------------
-# 4. Example usage (if run directly)
-# ----------------------------
-if __name__ == "__main__":
-    # Load SPICE kernels (adjust paths as needed)
-    #spice.furnsh("kernels/naif0012.tls")
-    #spice.furnsh("kernels/de440s.bsp")
+        print(C3_grid[i,j])
 
-    load_spice_kernels()
+'''
 
-    try:
-        dv, v_dep, v_earth = evaluate_ballistic_leg(
-            departure_epoch="2026-05-15",
-            target_body="Mars-Barycocenter",
-            tof_days=210,
-            prograde=True
-        )
-        print(f"Earth→Mars transfer on 2026-05-15 (210 days):")
-        print(f"  Departure ΔV = {dv:.3f} km/s")
-        print(f"  Earth velocity = {np.linalg.norm(v_earth):.3f} km/s")
-        print(f"  Departure velocity = {np.linalg.norm(v_dep):.3f} km/s")
-    finally:
-        spice.kclear()
+for i, t_arr in enumerate(arrival_ets):
+    # Get Mars position from your Kepler propagator (or SPICE)
+    r2 = kepler_propagate(*mars_elts, t=t_arr)
+    if np.any(np.isnan(r2)): continue
+
+    # Get TRUE Mars velocity from SPICE
+    state_mars, _ = spice.spkezr('4', t_arr, 'ECLIPJ2000', 'NONE', '10')
+    
+    v_mars_true = np.array(state_mars[3:6])
+
+    for j, t_dep in enumerate(launch_ets):
+        if t_arr <= t_dep: 
+            continue
+        tof = t_arr - t_dep
+        r1 = kepler_propagate(*earth_elts, t=t_dep)
+        if np.any(np.isnan(r1)): 
+            continue
+
+        v1, v2 = universal_lambert(r1, r2, tof)
+        if np.any(np.isnan(v1)): 
+            continue
+
+        # Get TRUE Earth velocity from SPICE
+        state_earth,_ = spice.spkezr('3', t_dep, 'ECLIPJ2000', 'NONE', '10')
+        v_earth_true = np.array(state_earth[3:6])
+
+        # Compute C3 correctly
+        v_inf = v1 - v_earth_true
+        C3_grid[i,j] = np.dot(v_inf, v_inf)
+
+        print(C3_grid[i,j])
+
+        '''
+        # Sanity check
+        if 5 < C3 < 50:  # reasonable range
+            C3_grid[i, j] = C3
+        else:
+            C3_grid[i, j] = np.nan
+        '''
+
+# Plot
+plt.figure(figsize=(10, 8))
+extent = [
+    (launch_ets[0] - t_launch0)/DAY,
+    (launch_ets[-1] - t_launch0)/DAY,
+    (arrival_ets[0] - t_launch0)/DAY,
+    (arrival_ets[-1] - t_launch0)/DAY
+]
+plt.imshow(C3_grid, origin='lower', aspect='auto', extent=extent, cmap='viridis')
+plt.colorbar(label='C3 (km²/s²)')
+plt.xlabel('Days from 2024-01-01 (launch)')
+plt.ylabel('Days from 2024-01-01 (arrival)')
+plt.title('Earth-Mars Porkchop (Keplerian Ephemeris)')
+plt.show()
