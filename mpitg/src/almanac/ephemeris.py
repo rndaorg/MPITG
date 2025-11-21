@@ -3,15 +3,20 @@ import matplotlib.pyplot as plt
 import spiceypy as spice
 from datetime import datetime, timedelta
 
+from mpitg.src.almanac.constants import MU_SUN
+
 # -----------------------------
 # Load SPICE kernels
 # -----------------------------
 
 def load_spice_kernels(): 
-    spice.furnsh("mpitg\\src\\almanac\\kernels\\naif0012.tls")
-    spice.furnsh("mpitg\\src\\almanac\\kernels\\de440s.bsp")
-    spice.furnsh("mpitg\\src\\almanac\\kernels\\pck00010.tpc")
-    spice.furnsh("mpitg\\src\\almanac\\kernels\\Gravity.tpc")
+    try:
+        spice.furnsh("mpitg\\src\\almanac\\kernels\\naif0012.tls")
+        spice.furnsh("mpitg\\src\\almanac\\kernels\\de440s.bsp")
+        spice.furnsh("mpitg\\src\\almanac\\kernels\\pck00010.tpc")
+        spice.furnsh("mpitg\\src\\almanac\\kernels\\Gravity.tpc")
+    except: 
+        print(f"Missing SPICE kernel: {''}")
 
 # SPICE body IDs:
 # Sun = 10, Mercury = 199, Venus = 299, Earth = 399, Mars = 499
@@ -78,6 +83,35 @@ def fetch_all_solar_system_constants():
     spice.kclear()
 
     #return solar_system_constants
+
+
+
+def get_keplerian_elements(body_id, epoch_et, mu=MU_SUN):
+    """
+    Return (a, e, i, LAN, w, M0, epoch) using SPICE osculating elements.
+    Angles in radians, distances in km, time in seconds.
+    """
+    state, _ = spice.spkezr(str(body_id), epoch_et, 'ECLIPJ2000', 'NONE', '10')  # Sun-centered
+    pos = np.array(state[:3])   # km
+    vel = np.array(state[3:])   # km/s
+    
+    elements = spice.oscelt(state, epoch_et, mu)
+    # oscelt returns: (perifocus_dist, eccentricity, inclination, LAN, argp, mean_anomaly, epoch)
+    p = elements[0]
+    e = elements[1]
+    i = elements[2]
+    LAN = elements[3]
+    w = elements[4]
+    M0 = elements[5]
+    t0 = elements[6]
+    
+    # Convert p to semi-major axis
+    if e < 1.0:
+        a = p / (1.0 - e**2)
+    else:
+        a = -p / (e**2 - 1.0)  # hyperbolic
+    return a, e, i, LAN, w, M0, t0
+
 
 
 def validate_spice():
