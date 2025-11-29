@@ -14,26 +14,41 @@ DAY = 86400.0
 RAD2DEG = 180.0 / np.pi
 DEG2RAD = np.pi / 180.0
 
+
+'''
+    MERCURY BARYCENTER (1)  SATURN BARYCENTER (6)   MERCURY (199)
+    VENUS BARYCENTER (2)    URANUS BARYCENTER (7)   VENUS (299)
+    EARTH BARYCENTER (3)    NEPTUNE BARYCENTER (8)  MOON (301)
+    MARS BARYCENTER (4)     PLUTO BARYCENTER (9)    EARTH (399)
+    JUPITER BARYCENTER (5)  SUN (10)
+'''
+
 # Body SPICE IDs
 BODY_IDS = {
-    'Mercury': 199,
-    'Venus': 299,
-    'Earth': 399,
-    'Mars-Barycenter': 4,
-    'Mars': 499,
-    'Jupiter': 599,
-    'Saturn': 699,
-    'Uranus': 799,
-    'Neptune': 899
+    'MERCURY': 199,
+    'MERCURY BARYCENTER': 1,
+    'VENUS': 299,
+    'VENUS BARYCENTER': 2, 
+    'EARTH': 399,
+    'EARTH BARYCENTER': 3,
+    'MARS': 499,
+    'MARS BARYCENTER': 4,
+    'JUPITER BARYCENTER': 5,
+    'SATURN BARYCENTER': 6,
+    'URANUS BARYCENTER': 7,
+    'NEPTUNE BARYCENTER': 8,
+    'PLUTO BARYCENTER': 9,
+    'SUN': 10
+
 }
 
 
 body_names = [
     "SUN", 
-    "MERCURY", 
-    "VENUS", 
-    "EARTH", 
-    "MARS",
+    "MERCURY BARYCENTER", 
+    "VENUS BARYCENTER", 
+    "EARTH BARYCENTER", 
+    "MARS BARYCENTER",
     "JUPITER BARYCENTER", 
     "SATURN BARYCENTER", 
     "URANUS BARYCENTER", 
@@ -43,14 +58,14 @@ body_names = [
 
 masses_kg = {
     "SUN": 1.9885e30,
-    "MERCURY": 3.3011e23,
-    "VENUS": 4.8675e24,
-    "EARTH": 5.9722e24,
-    "MARS": 6.4171e23,
-    "JUPITER": 1.8982e27,
-    "SATURN": 5.6834e26,
-    "URANUS": 8.6810e25,
-    "NEPTUNE": 1.0241e26
+    "MERCURY BARYCENTER": 3.3011e23,
+    "VENUS BARYCENTER": 4.8675e24,
+    "EARTH BARYCENTER": 5.9722e24,
+    "MARS BARYCENTER": 6.4171e23,
+    "JUPITER BARYCENTER": 1.8982e27,
+    "SATURN BARYCENTER": 5.6834e26,
+    "URANUS BARYCENTER": 8.6810e25,
+    "NEPTUNE BARYCENTER": 1.0241e26
 }
 
 
