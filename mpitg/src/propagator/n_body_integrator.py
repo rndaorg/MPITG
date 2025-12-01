@@ -6,25 +6,6 @@ import os
 from mpitg.src.almanac.constants import EPOCH_STR, FRAME, G_SI, SECONDS_PER_YEAR, YEARS, body_names, masses_kg
 from mpitg.src.almanac.ephemeris import load_spice_kernels
 
-# ----------------------------
-# SPICE
-# ----------------------------
-
-load_spice_kernels()
-
-et0 = spice.str2et(EPOCH_STR)
-
-positions, velocities, masses = [], [], []
-for name in body_names:
-    print(name)
-    state, _ = spice.spkezr(name, et0, FRAME, "NONE", "SSB")
-    positions.append(np.array(state[:3]) * 1e3)
-    velocities.append(np.array(state[3:6]) * 1e3)
-    masses.append(masses_kg[name])
-
-masses = np.array(masses)
-N = len(masses)
-spice.kclear()
 
 # ----------------------------
 # Physics
@@ -144,13 +125,36 @@ def integrate_rk45(func, y0, t0, tf, masses, rtol=1e-9, atol=1e-12, h0=86400.0):
 
     return np.array(t_vals), np.array(y_vals)
 
+
+# ----------------------------
+# SPICE
+# ----------------------------
+
+load_spice_kernels()
+
+et0 = spice.str2et(EPOCH_STR)
+
+positions, velocities, masses = [], [], []
+
+for name in body_names:
+    print(name)
+    state, _ = spice.spkezr(name, et0, FRAME, "NONE", "SSB")
+    positions.append(np.array(state[:3]) * 1e3)
+    velocities.append(np.array(state[3:6]) * 1e3)
+    masses.append(masses_kg[name])
+
+masses = np.array(masses)
+N = len(masses)
+spice.kclear()
+
+
 # ----------------------------
 # Run Integration
 # ----------------------------
 
 y0 = np.hstack([np.array(positions).flatten(), np.array(velocities).flatten()])
 t0 = 0.0
-tf = YEARS * SECONDS_PER_YEAR
+tf = 1 * SECONDS_PER_YEAR
 
 print("Integrating with pure Python adaptive RK45...")
 t_vals, y_vals = integrate_rk45(
@@ -185,7 +189,7 @@ load_spice_kernels()
 earth_spice_pos = []
 for t in t_vals:
     et = et0 + t
-    pos_km, _ = spice.spkpos("EARTH", et, FRAME, "NONE", "SSB")
+    pos_km, _ = spice.spkpos("EARTH BARYCENTER", et, FRAME, "NONE", "SSB")
     earth_spice_pos.append(np.array(pos_km) * 1e3)
 earth_spice_pos = np.array(earth_spice_pos)
 spice.kclear()
