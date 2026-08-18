@@ -5,14 +5,15 @@ import datetime as dt
 import spiceypy as sp
 
 from mpitg.src.almanac.ephemeris import load_spice_kernels
+from mpitg.src.solver.izzo import lambert_izzo2015
 from mpitg.src.solver.lambert import lambert_universal
 
 
 # ===========================================================
 # Compute TOTAL C3 grid: departure × arrival
 # ===========================================================
-def compute_total_c3_grid(date_start="2024-04-01",
-                          date_end="2024-12-01",
+def compute_total_c3_grid(date_start="2029-01-01",
+                          date_end="2031-01-01",
                           n_dates=80):
 
     load_spice_kernels()
@@ -44,7 +45,7 @@ def compute_total_c3_grid(date_start="2024-04-01",
             v2_mars = state_M[3:6]
 
             try:
-                v1t, v2t = lambert_universal(r1, r2, tof, mu_sun)
+                v1t, v2t = lambert_izzo2015(r1, r2, tof, mu_sun)
             except Exception:
                 continue
 
@@ -52,7 +53,7 @@ def compute_total_c3_grid(date_start="2024-04-01",
             v_inf_arr = np.linalg.norm(v2t - v2_mars)
 
             TOTAL_C3[i, j] = v_inf_dep**2 + v_inf_arr**2
-            print(TOTAL_C3[i, j])
+            #print(TOTAL_C3[i, j])
 
     return dep_times, arr_times, TOTAL_C3
 
@@ -74,6 +75,7 @@ NASA_COLORS = [
 def plot_total_c3_porkchop(dep_et, arr_et, TOTAL_C3,
                            title="EARTH–MARS TOTAL C3 PORKCHOP"):
 
+    # Convert ET → datetime
     def et2dt(et):
         utc = sp.et2utc(et, "C", 0)
         return dt.datetime.strptime(utc, "%Y %b %d %H:%M:%S")
@@ -81,46 +83,56 @@ def plot_total_c3_porkchop(dep_et, arr_et, TOTAL_C3,
     dep_dt = np.array([et2dt(t) for t in dep_et])
     arr_dt = np.array([et2dt(t) for t in arr_et])
 
+    # Convert to matplotlib floats
     dep_num = mdates.date2num(dep_dt)
     arr_num = mdates.date2num(arr_dt)
 
-    # Adjust these based on your mission window
-    C3_LEVELS = [0, 40, 80, 120, 160, 200, 240, 280, 320]
+    # Mask invalids to remove jagged white noise
+    C3 = np.ma.masked_invalid(TOTAL_C3)
+
+    C3_LEVELS = np.array([0, 40, 80, 120, 160, 200, 240, 280, 320])
 
     fig, ax = plt.subplots(figsize=(14, 8))
 
+    # --- Filled contour ---
     cp = ax.contourf(
-        arr_dt, dep_dt, TOTAL_C3,
+        dep_num, arr_num, C3,
         levels=C3_LEVELS,
-        colors=NASA_COLORS,
+        cmap="turbo",
         extend="max"
     )
 
+    # --- Line contours ---
     cl = ax.contour(
-        arr_dt, dep_dt, TOTAL_C3,
+        dep_num, arr_num, C3,
         levels=C3_LEVELS,
         colors="black",
         linewidths=0.8
     )
     ax.clabel(cl, inline=True, fontsize=8, fmt="%.0f")
 
-    # Grid overlay
-    ax.set_xticks(arr_dt[::6])
-    ax.set_yticks(dep_dt[::6])
-    ax.grid(True, linestyle="-", linewidth=0.3, color="black")
+    # Date formatting
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
+    ax.yaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
+    fig.autofmt_xdate(rotation=45)
 
-    # Time-of-flight diagonal lines (6, 7, 8, 9 months)
+    # Grid
+    ax.grid(True, linestyle="-", linewidth=0.3, color="black", alpha=0.4)
+
+    # --- Time-of-flight diagonal lines ---
     for months in [6, 7, 8, 9]:
         days = months * 30.437
-        for d in dep_dt[::10]:
-            a = d + dt.timedelta(days=days)
-            ax.plot([a], [d], "k-", alpha=0.5)
+        tof_arr = dep_num + days
+        ax.plot(tof_arr, dep_num, "k--", linewidth=1, alpha=0.7,
+                label=f"{months} mo TOF" if months == 6 else None)
 
-    ax.set_xlabel("Arrival at Mars")
-    ax.set_ylabel("Depart from Earth")
+    # Labels
+    ax.set_ylabel("Arrival at Mars")
+    ax.set_xlabel("Departure from Earth")
     ax.set_title(title, fontsize=16, fontweight="bold")
 
-    cbar = plt.colorbar(cp)
+    # Colorbar
+    cbar = fig.colorbar(cp)
     cbar.set_label("Total C3 (km²/s²)")
 
     plt.tight_layout()
@@ -132,5 +144,6 @@ def plot_total_c3_porkchop(dep_et, arr_et, TOTAL_C3,
 # ===========================================================
 if __name__ == "__main__":
     dep, arr, totC3 = compute_total_c3_grid()
+    print(totC3)
     plot_total_c3_porkchop(dep, arr, totC3)
     print("Minimum total C3:", np.nanmin(totC3))
